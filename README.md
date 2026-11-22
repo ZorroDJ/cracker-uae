@@ -29,23 +29,22 @@ libtrace enable 1
 reset
 ```
 
-In short:
-* Original features
+### Original features ###
 - Ported the original libtrace and FD metadata parser.
 - Fixed resident activation by lowering its priority below Expansion.
 - Debugger commands: K, Ke, Kc, Kt, Ko; K replaces the original L prefix because L already means “load memory.”
-* TCP controls:
+###  TCP controls: ###
 libtrace config <path>
 libtrace output <path>
 libtrace task <name>
 libtrace enable <0|1>
 - Configuration changes are queued on the emulation thread; installation occurs on reset.
-* DOS 1.x and native BCPL tracing
+###  DOS 1.x and native BCPL tracing ###
 - Added a read-only instruction observer for non-JMP DOS library vectors.
 - Added native BCPL SAVE/RET observation using the live global vector and BCPL frame.
 - Captures public DOS results in D0, native BCPL results in D1, and bounded, escaped BSTR previews.
 - Initial BCPL signatures: writes, writef, wrch, writen, newline, rdch, readn, input, output.
-* Validation
+###  Validation ###
 - Added tools/libtrace-smoke.py for tracing, filtering, reset and re-enable tests.
 - Verified on Workbench 1.2 / Kickstart 1.3, including the original BCPL Echo and a mixed C/BCPL probe.
 - The new instruction-observer backend currently supports the 68000 interpreter without JIT.
