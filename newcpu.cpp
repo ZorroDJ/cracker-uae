@@ -32,6 +32,7 @@
 #include "cpu_prefetch.h"
 #include "autoconf.h"
 #include "traps.h"
+#include "uae/libtrace.h"
 #include "debug.h"
 #include "gdb_server.h"
 #include "debugmem.h"
@@ -70,6 +71,9 @@ volatile bool jit_in_compiled_code = false;
 #endif
 
 /* For faster JIT cycles handling */
+/* allow traps (a-line) calls everywhere (libtrace) */
+int traps_everywhere = 0;
+
 int pissoff = 0;
 
 /* Opcode of faulting instruction */
@@ -3909,7 +3913,8 @@ uae_u32 REGPARAM2 op_illg (uae_u32 opcode)
 		return 4;
 	}
 
-	if ((opcode & 0xF000) == 0xA000 && inrt) {
+	if ((opcode & 0xF000) == 0xA000 &&
+		(inrt || (traps_everywhere && libtrace_handles_trap(pc, opcode)))) {
 		/* Calltrap. */
 		m68k_incpc_normal (2);
 		m68k_handle_trap(opcode & 0xFFF);
@@ -5047,6 +5052,8 @@ static void m68k_run_1 (void)
 				}
 #endif
 				r->instruction_pc = m68k_getpc ();
+				if (libtrace_observer_active)
+					libtrace_observe_instruction(r->instruction_pc);
 				cpu_cycles = (*cpufunctbl[r->opcode])(r->opcode) & 0xffff;
 				if (!regs.loop_mode)
 					regs.ird = regs.opcode;
@@ -5171,6 +5178,8 @@ static void m68k_run_1_ce (void)
 					record_dma_event_data(DMA_EVENT_CPUINS, r->opcode);
 				}
 #endif
+				if (libtrace_observer_active)
+					libtrace_observe_instruction(r->instruction_pc);
 
 				(*cpufunctbl_noret[r->opcode])(r->opcode);
 				if (!regs.loop_mode)
@@ -6573,6 +6582,8 @@ static void m68k_run_2_000(void)
 		TRY(prb) {
 			while (!exit) {
 				r->instruction_pc = m68k_getpc ();
+				if (libtrace_observer_active)
+					libtrace_observe_instruction(r->instruction_pc);
 
 				r->opcode = x_get_iword(0);
 				count_instr (r->opcode);

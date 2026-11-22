@@ -64,6 +64,12 @@ extern int instruction_breakpoint (TCHAR **c);
 extern int debug_bankchange (int);
 extern void log_dma_record (void);
 extern void debug_parser (const TCHAR *cmd, TCHAR *out, uae_u32 outsize);
+#ifdef FSUAE
+// TCP workers submit commands; only the emulation thread runs the parser.
+int debug_tcp_command(const char *cmd, char *out, int size);
+void debug_tcp_poll(void);
+void debug_tcp_release(void);
+#endif
 extern void mmu_disasm (uaecptr pc, int lines);
 extern int debug_read_memory_16 (uaecptr addr);
 extern int debug_peek_memory_16 (uaecptr addr);

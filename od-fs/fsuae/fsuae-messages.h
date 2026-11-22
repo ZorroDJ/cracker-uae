@@ -12,6 +12,10 @@ void fsuae_messages_set_channel(fsapp_channel_t *channel);
 void fsuae_messages_process_early(void);
 void fsuae_messages_process(void);
 
+void fsuae_messages_post_insert_floppy(const char *path);
+void fsuae_messages_post_reset(void);
+bool fsuae_messages_post_libtrace(const char *command);
+
 enum {
     FSUAE_MESSAGES_WRITE_PROTECT_DRIVE_0 = 0x1000,
     FSUAE_MESSAGES_WRITE_PROTECT_DRIVE_1 = 0x1001,
@@ -37,6 +41,8 @@ enum {
     FSUAE_MESSAGES_QUICKSTART_A4000T = 10012,
     FSUAE_MESSAGES_QUICKSTART_CD32 = 10013,
     FSUAE_MESSAGES_QUICKSTART_CDTV = 10014,
+    FSUAE_MESSAGES_INSERT_FLOPPY = 10015,
+    FSUAE_MESSAGES_LIBTRACE_CONTROL = 10016,
 };
 
 #ifdef __cplusplus

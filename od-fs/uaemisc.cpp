@@ -11,6 +11,54 @@
 #include "clipboard.h"
 #include "uae/fs.h"
 #include "debug_win32.h"
+#include "newcpu.h"
+#include "debug.h"
+#include "memory.h"
+#include <stdio.h>
+
+extern "C" void cracker_uae_debug_regs(char *out, int size)
+{
+    snprintf(out, size,
+        "PC=%08X SR=%04X USP=%08X ISP=%08X\n"
+        "D0=%08X D1=%08X D2=%08X D3=%08X\n"
+        "D4=%08X D5=%08X D6=%08X D7=%08X\n"
+        "A0=%08X A1=%08X A2=%08X A3=%08X\n"
+        "A4=%08X A5=%08X A6=%08X A7=%08X\n",
+        (unsigned)regs.pc, (unsigned)regs.sr, (unsigned)regs.usp, (unsigned)regs.isp,
+        (unsigned)regs.regs[0], (unsigned)regs.regs[1],
+        (unsigned)regs.regs[2], (unsigned)regs.regs[3],
+        (unsigned)regs.regs[4], (unsigned)regs.regs[5],
+        (unsigned)regs.regs[6], (unsigned)regs.regs[7],
+        (unsigned)regs.regs[8], (unsigned)regs.regs[9],
+        (unsigned)regs.regs[10], (unsigned)regs.regs[11],
+        (unsigned)regs.regs[12], (unsigned)regs.regs[13],
+        (unsigned)regs.regs[14], (unsigned)regs.regs[15]);
+}
+
+extern "C" int cracker_uae_debug_readmem(unsigned int addr, unsigned char *out, int len)
+{
+    for (int i = 0; i < len; i++) {
+        out[i] = (unsigned char)get_byte(addr + i);
+    }
+    return len;
+}
+
+extern "C" int cracker_uae_debug_command(const char *command, char *out, int size)
+{
+#ifdef DEBUGGER
+    return debug_tcp_command(command, out, size);
+#else
+    snprintf(out, size, "ERR debugger support is not compiled in\n");
+    return -1;
+#endif
+}
+
+extern "C" void cracker_uae_debug_release(void)
+{
+#ifdef DEBUGGER
+    debug_tcp_release();
+#endif
+}
 
 // #include <fs/emu/hacks.h>
 

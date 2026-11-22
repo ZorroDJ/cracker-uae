@@ -17,6 +17,15 @@
 #include "options.h"
 #include "uae.h"
 #include "uae/io.h"
+#include "uae/libtrace.h"
+#ifdef FSUAE
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <string>
+#include <vector>
+#include "fsemu-quit.h"
+#endif
 #include "memory.h"
 #include "custom.h"
 #include "newcpu.h"
@@ -268,6 +277,11 @@ static const TCHAR help[] = {
 	_T("                        v [-2 to -5] = enable visual DMA debugger.\n")
 	_T("  vh [<ratio> <lines>]  \"Heat map\"\n")
 	_T("  I <custom event>      Send custom event string\n")
+	_T("  K                     print libtrace status.\n")
+	_T("  Ke [<0-1]             enable/disable/toggle libtrace\n")
+	_T("  Kc 'config'           set libtrace config file\n")
+	_T("  Kt 'task'             trace only task with this name\n")
+	_T("  Ko 'output'           write traces to output file\n")
 	_T("  ?<value>              Hex ($, 0x)/Bin (%)/Dec (!) converter and calculator. \"?.\" to include also floating point formats.\n")
 #ifdef _WIN32
 	_T("  x                     Close debugger.\n")
@@ -7339,6 +7353,104 @@ static bool parsecmd(TCHAR *cmd, bool *out)
 	return false;
 }
 
+
+static int libtrace_read_string(TCHAR **inptr, TCHAR *out, int max)
+{
+	ignore_ws(inptr);
+	if (!**inptr) {
+		out[0] = 0;
+		return -1;
+	}
+	TCHAR quote = 0;
+	if (peekchar(inptr) == '\'' || peekchar(inptr) == '"') {
+		quote = next_char(inptr);
+	}
+	int n = 0;
+	while (**inptr) {
+		TCHAR c = **inptr;
+		if (quote && c == quote) {
+			(*inptr)++;
+			break;
+		}
+		if (!quote && (c == ' ' || c == '\t')) {
+			break;
+		}
+		if (n < max - 1) {
+			out[n++] = c;
+		}
+		(*inptr)++;
+	}
+	out[n] = 0;
+	return n;
+}
+
+static void libtrace(TCHAR **inptr)
+{
+	int show_status = 0;
+	if (more_params(inptr)) {
+		switch (next_char(inptr)) {
+		case 'e':
+			{
+				int enable = libtrace_is_enabled();
+				ignore_ws(inptr);
+				if (more_params(inptr)) {
+					int v = readint(inptr, NULL);
+					enable = v ? 1 : 0;
+				} else {
+					enable = enable ? 0 : 1;
+				}
+				show_status = 1;
+				if (enable != libtrace_is_enabled()) {
+					libtrace_enable(enable);
+					if (enable) {
+						console_out_f(_T("Reset Amiga to activate libtrace!\n"));
+					}
+				}
+			}
+			break;
+		case 'c':
+			{
+				TCHAR str[256];
+				int len = libtrace_read_string(inptr, str, 256);
+				if (len > 0) {
+					libtrace_set_cfg_file(str);
+				}
+				console_out_f(_T("libtrace config file: '%s'\n"), libtrace_get_cfg_file());
+			}
+			break;
+		case 't':
+			{
+				TCHAR str[256];
+				int len = libtrace_read_string(inptr, str, 256);
+				if (len > 0) {
+					libtrace_set_task_name(str);
+				} else if (len == 0) {
+					libtrace_set_task_name(NULL);
+				}
+				console_out_f(_T("libtrace task: %s\n"), libtrace_get_task_name());
+			}
+			break;
+		case 'o':
+			{
+				TCHAR str[256];
+				int len = libtrace_read_string(inptr, str, 256);
+				if (len > 0) {
+					libtrace_set_output_file(str);
+				} else if (len == 0) {
+					libtrace_set_output_file(NULL);
+				}
+				console_out_f(_T("libtrace output file: %s\n"), libtrace_get_output_file());
+			}
+			break;
+		}
+	} else {
+		show_status = 1;
+	}
+	if (show_status) {
+		console_out_f(_T("libtrace is %s\n"), libtrace_is_enabled() ? "enabled" : "disabled");
+	}
+}
+
 static bool debug_line_2(TCHAR *input)
 {
 	TCHAR cmd, *inptr;
@@ -7978,6 +8090,9 @@ static bool debug_line_2(TCHAR *input)
 				debug_do_mmu_translate(addrl);
 			}
 			break;
+		case 'K':
+			libtrace(&inptr);
+			break;
 		case 'h':
 		case '?':
 			if (more_params(&inptr)) {
@@ -8029,6 +8144,171 @@ static bool debug_line(TCHAR *input)
 	xfree(in);
 	return ret;
 }
+
+#ifdef FSUAE
+namespace {
+struct TcpDebugger {
+	std::mutex mutex;
+	std::condition_variable changed;
+	bool owned = false, halted = false, pending = false;
+	bool busy = false, executing = false, done = false, abandoned = false;
+	bool release = false;
+	bool interrupt_requested = false;
+	uaecptr last_pc = 0;
+	std::string command, response;
+} tcp_debugger;
+
+bool tcp_debugger_owned()
+{
+	std::lock_guard<std::mutex> lock(tcp_debugger.mutex);
+	return tcp_debugger.owned;
+}
+
+void tcp_debugger_complete(const std::string& response)
+{
+	// Caller holds the mutex. A timed-out executing command still runs to
+	// completion; its worker has explicitly reported that it was not cancelled.
+	tcp_debugger.response = response;
+	tcp_debugger.executing = false;
+	tcp_debugger.done = true;
+	if (tcp_debugger.abandoned) tcp_debugger.busy = false;
+	tcp_debugger.changed.notify_all();
+}
+}
+
+int debug_tcp_command(const char *cmd, char *out, int size)
+{
+	if (!out || size <= 0) return -1;
+	std::unique_lock<std::mutex> lock(tcp_debugger.mutex);
+	if (cmd && !strcmp(cmd, "status")) {
+		snprintf(out, size, "OK debug %s last_stop_pc=%08x\n",
+			tcp_debugger.halted ? "halted" : "running", tcp_debugger.last_pc);
+		return 0;
+	}
+	if (tcp_debugger.busy) {
+		snprintf(out, size, "ERR debugger command already in progress\n");
+		return -1;
+	}
+	tcp_debugger.busy = true;
+	tcp_debugger.done = tcp_debugger.executing = tcp_debugger.abandoned = false;
+	tcp_debugger.command = cmd && cmd[0] ? cmd : "r";
+	tcp_debugger.pending = true;
+	tcp_debugger.changed.notify_all();
+	if (!tcp_debugger.changed.wait_for(lock, std::chrono::seconds(20), [] {
+		return tcp_debugger.done;
+	})) {
+		if (tcp_debugger.pending) {
+			tcp_debugger.pending = false;
+			tcp_debugger.busy = false;
+			if (tcp_debugger.owned) tcp_debugger.release = true;
+			tcp_debugger.changed.notify_all();
+			snprintf(out, size, "ERR debugger timeout; queued command cancelled\n");
+		} else {
+			tcp_debugger.abandoned = true;
+			snprintf(out, size, "ERR debugger timeout; command is already executing\n");
+		}
+		return -1;
+	}
+	snprintf(out, size, "%s", tcp_debugger.response.c_str());
+	tcp_debugger.busy = false;
+	return 0;
+}
+
+void debug_tcp_release(void)
+{
+	std::lock_guard<std::mutex> lock(tcp_debugger.mutex);
+	tcp_debugger.release = true;
+	tcp_debugger.changed.notify_all();
+}
+
+void debug_tcp_poll(void)
+{
+	// Called at the frame boundary on the emulation thread, not by TCP workers.
+	std::lock_guard<std::mutex> lock(tcp_debugger.mutex);
+	if (tcp_debugger.release && tcp_debugger.pending) {
+		tcp_debugger.pending = false;
+		tcp_debugger_complete("ERR debugger released; queued command cancelled\n");
+	}
+	if (tcp_debugger.release && !tcp_debugger.halted && !tcp_debugger.interrupt_requested) {
+		tcp_debugger.owned = false;
+		tcp_debugger.release = false;
+	}
+	if (!tcp_debugger.pending || tcp_debugger.halted) return;
+	if (gdb_server_connected() || (debugger_active && !tcp_debugger.owned)) {
+		tcp_debugger.pending = false;
+		tcp_debugger_complete("ERR another debugger owns the CPU\n");
+		return;
+	}
+	tcp_debugger.owned = true;
+	tcp_debugger.interrupt_requested = true;
+	initialize_debugger();
+	debugger_used = 1;
+	debug_pc = 0xffffffff;
+	trace_mode = TRACE_IMMEDIATE;
+	debugging = 1;
+	set_special(SPCFLAG_BRK);
+}
+
+static void debug_tcp_loop(void)
+{
+	draw_denise_line_queue_flush();
+	inside_debugger = debugger_active = 1;
+	debug_pc = 0xffffffff;
+	nxdis = m68k_getpc();
+	nxmem = 0;
+	// nextpc is used by native step-over commands. Suppress this initial dump;
+	// commands such as 'r' will produce their own captured output.
+	TCHAR initial[4096] = {};
+	setconsolemode(initial, 4096);
+	m68k_dumpstate(&nextpc, 0xffffffff);
+	setconsolemode(NULL, 0);
+	std::unique_lock<std::mutex> lock(tcp_debugger.mutex);
+	tcp_debugger.interrupt_requested = false;
+	tcp_debugger.halted = true;
+	tcp_debugger.last_pc = m68k_getpc();
+	for (;;) {
+		tcp_debugger.changed.wait_for(lock, std::chrono::milliseconds(25), [] {
+			return tcp_debugger.pending || tcp_debugger.release;
+		});
+		if (tcp_debugger.release || quit_program || fsemu_quit_check()) {
+			if (tcp_debugger.pending) {
+				tcp_debugger.pending = false;
+				tcp_debugger_complete("ERR debugger released; queued command cancelled\n");
+			}
+			tcp_debugger.owned = tcp_debugger.halted = tcp_debugger.release = false;
+			lock.unlock();
+			deactivate_debugger();
+			return;
+		}
+		if (!tcp_debugger.pending) continue;
+		std::string command = tcp_debugger.command;
+		tcp_debugger.pending = false;
+		tcp_debugger.executing = true;
+		lock.unlock();
+		std::vector<TCHAR> output(256 * 1024, 0);
+		TCHAR *line = my_strdup(command.c_str());
+		debug_linecounter = 0;
+		setconsolemode(output.data(), output.size());
+		// This is the same parser used by the interactive console, including
+		// multi-command lines, assembly mode and native execution control.
+		bool resume = debug_line(line);
+		setconsolemode(NULL, 0);
+		xfree(line);
+		lock.lock();
+		tcp_debugger.last_pc = m68k_getpc();
+		tcp_debugger.halted = !resume;
+		std::string response = resume ? "OK debug running\n" : "OK debug halted\n";
+		response += output.data();
+		if (_tcslen(output.data()) >= output.size() - 1)
+			response += "\n[debug output truncated at 256 KiB]\n";
+		tcp_debugger_complete(response);
+		if (resume) {
+			inside_debugger = debugger_active = 0;
+			return;
+		}
+	}
+}
+#endif
 
 static TCHAR input[MAX_LINEWIDTH];
 
@@ -8496,7 +8776,10 @@ void debug (void)
 	pause_sound ();
 	setmouseactive(0, 0);
 	target_inputdevice_unacquire(true);
-	activate_console ();
+#ifdef FSUAE
+	if (!tcp_debugger_owned())
+#endif
+		activate_console ();
 	trace_mode = 0;
 	exception_debugging = 0;
 	debug_rewind = 0;
@@ -8527,7 +8810,11 @@ void debug (void)
 	}
 	trace_cycles = 0;
 
-	debug_1 ();
+#ifdef FSUAE
+	if (tcp_debugger_owned()) debug_tcp_loop();
+	else
+#endif
+		debug_1 ();
 	debugmem_enable();
 	if (!debug_rewind && !currprefs.cachesize
 #ifdef FILESYS

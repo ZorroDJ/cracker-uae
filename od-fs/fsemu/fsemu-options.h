@@ -9,6 +9,9 @@
 
 #define FSEMU_OPTION_BUSY_WAIT "busy_wait"
 
+#define FSEMU_OPTION_DEBUG_SERVER "debug_server"
+#define FSEMU_OPTION_DEBUG_SERVER_PORT "debug_server_port"
+
 #define FSEMU_OPTION_FULLSCREEN "fullscreen"
 #define FSEMU_OPTION_FULLSCREEN_H "fullscreen_h"
 #define FSEMU_OPTION_FULLSCREEN_W "fullscreen_w"

@@ -3,6 +3,7 @@
 
 #include "uae/fs.h"
 #include "uae.h"
+#include "debug.h"
 
 #include "fsapp-time.h"
 #include "fs/trace.h"
@@ -425,6 +426,9 @@ void uae_fs_end_frame()
 
     // FIXME: Make into a callback instead (later)
     fsuae_messages_process();
+#ifdef DEBUGGER
+    debug_tcp_poll();
+#endif
 
     // The main thread asks the emulation to stop (window closed, quit shortcut) by setting the
     // fsemu quit flag. uae_quit is called here, on the emulation thread, so the core can end

@@ -553,6 +553,8 @@ libuae_a_SOURCES = \
 	include/uae/glib.h \
 	include/uae/inline.h \
 	include/uae/io.h \
+	include/uae/libinfo.h \
+	include/uae/libtrace.h \
 	include/uae/jitconfig.h \
 	include/uae/likely.h \
 	include/uae/limits.h \
@@ -599,6 +601,8 @@ libuae_a_SOURCES = \
 	kbmcu/m6805/m68emu.cpp \
 	kbmcu/m6805/m68emu.h \
 	keybuf.cpp \
+	libinfo.cpp \
+	libtrace.cpp \
 	logging.cpp \
 	main.cpp \
 	mame/a2410.cpp \

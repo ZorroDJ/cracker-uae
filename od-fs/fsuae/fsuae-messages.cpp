@@ -12,6 +12,7 @@
 #undef DUMMY_KEEP_INCLUDE_ORDER
 
 #include "disk.h"
+#include "uae/libtrace.h"
 #include "libuae.h" // libamiga
 #include "memory.h"
 #include "options.h"
@@ -64,6 +65,27 @@ void fsuae_messages_set_channel(fsapp_channel_t *channel)
 
 static void fsuae_messages_handle_message(int type, const char *data)
 {
+    if (type == FSUAE_MESSAGES_LIBTRACE_CONTROL) {
+        // Configuration changes run on the emulation thread. Vector patches
+        // are installed by the guest resident on the next reset, never by
+        // calling guest code from the TCP worker thread.
+        if (!strncmp(data, "config ", 7)) {
+            libtrace_set_cfg_file(data + 7);
+        } else if (!strncmp(data, "output ", 7)) {
+            libtrace_set_output_file(data[7] ? data + 7 : NULL);
+        } else if (!strncmp(data, "task ", 5)) {
+            libtrace_set_task_name(data[5] ? data + 5 : NULL);
+        } else if (!strncmp(data, "enable ", 7)) {
+            libtrace_enable(data[7] == '1');
+        }
+        return;
+    }
+    if (type == FSUAE_MESSAGES_INSERT_FLOPPY) {
+        if (data && data[0]) {
+            disk_insert(0, data);
+        }
+        return;
+    }
     if (type == FSUAE_MESSAGES_RESET) {
         uae_reset(1, 1);
         copy_prefs(&changed_prefs, &currprefs);
@@ -214,4 +236,25 @@ void fsuae_messages_process(void)
         SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "[CHANNEL] Received message type %d", type);
         fsuae_messages_handle_message(type, data);
     }
+}
+
+void fsuae_messages_post_insert_floppy(const char *path)
+{
+    if (g_channel && path && path[0]) {
+        fsapp_channel_post_message(g_channel, FSUAE_MESSAGES_INSERT_FLOPPY, path);
+    }
+}
+
+void fsuae_messages_post_reset(void)
+{
+    if (g_channel) {
+        fsapp_channel_post_message(g_channel, FSUAE_MESSAGES_RESET, "");
+    }
+}
+
+bool fsuae_messages_post_libtrace(const char *command)
+{
+    if (!g_channel) return false;
+    fsapp_channel_post_message(g_channel, FSUAE_MESSAGES_LIBTRACE_CONTROL, command);
+    return true;
 }

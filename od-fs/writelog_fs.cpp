@@ -464,8 +464,8 @@ static void flushconsole (void)
 	}
 }
 
-static TCHAR *console_buffer;
-static int console_buffer_size;
+static thread_local TCHAR *console_buffer;
+static thread_local int console_buffer_size;
 
 TCHAR *setconsolemode (TCHAR *buffer, int maxlen)
 {
@@ -483,8 +483,12 @@ TCHAR *setconsolemode (TCHAR *buffer, int maxlen)
 static void console_put (const TCHAR *buffer)
 {
 	if (console_buffer) {
-		if (_tcslen (console_buffer) + _tcslen (buffer) < console_buffer_size)
-			_tcscat (console_buffer, buffer);
+		size_t used = _tcslen(console_buffer);
+		if (console_buffer_size > 0 && used < (size_t)console_buffer_size - 1) {
+			size_t count = (size_t)console_buffer_size - used - 1;
+			_tcsncat(console_buffer, buffer, count);
+			console_buffer[console_buffer_size - 1] = 0;
+		}
 	} else {
 		openconsole ();
 		writeconsole (buffer);
@@ -533,7 +537,22 @@ void console_out_f (const TCHAR *format,...)
 #else
 	va_list arg_ptr;
 	va_start(arg_ptr, format);
-	vprintf(format, arg_ptr);
+	if (console_buffer) {
+		va_list copy;
+		va_copy(copy, arg_ptr);
+		int count = vsnprintf(NULL, 0, format, copy);
+		va_end(copy);
+		if (count >= 0) {
+			char *text = (char *)malloc((size_t)count + 1);
+			if (text) {
+				vsnprintf(text, (size_t)count + 1, format, arg_ptr);
+				console_put(text);
+				free(text);
+			}
+		}
+	} else {
+		vprintf(format, arg_ptr);
+	}
 	va_end(arg_ptr);
 
 #endif
@@ -544,7 +563,8 @@ void console_out (const TCHAR *txt)
 #ifdef _WIN32
 	console_put (txt);
 #else
-	printf("%s", txt);
+	if (console_buffer) console_put(txt);
+	else printf("%s", txt);
 #endif
 }
 

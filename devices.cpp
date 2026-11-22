@@ -86,6 +86,7 @@
 #ifdef WITH_SEGTRACKER
 #include "uae/debuginfo.h"
 #include "uae/segtracker.h"
+#include "uae/libtrace.h"
 #endif
 
 #define MAX_DEVICE_ITEMS 64
@@ -451,6 +452,7 @@ void do_leave_program (void)
 	SDL_Quit();
 #endif
 	machdep_free();
+	libtrace_cleanup();
 
 	if (thread_sema) {
 		uae_sem_destroy(&thread_sema);
@@ -460,6 +462,12 @@ void do_leave_program (void)
 
 void virtualdevice_init (void)
 {
+	/* libtrace needs the UAE boot ROM / filesys diag entry */
+	const char *libtrace_env = getenv("CRACKER_UAE_LIBTRACE");
+	if (libtrace_env && libtrace_env[0] && strcmp(libtrace_env, "0")) {
+		currprefs.uaeboard = 2;
+		changed_prefs.uaeboard = 2;
+	}
 	if (!thread_sema) {
 		uae_sem_init(&thread_sema, 0, 1);
 	}
@@ -474,6 +482,7 @@ void virtualdevice_init (void)
 #endif
 #ifdef FILESYS
 	rtarea_init ();
+	libtrace_install ();
 	uaeres_install ();
 	hardfile_install ();
 #endif

@@ -587,6 +587,7 @@ fsemu_video_frame_t *fsemu_video_get_frame(int32_t timeout_ms)
     }
 #endif
     if (frame->partial == 0 || frame->partial == frame->height) {
+        fsemu_screenshot_remember_video_frame(frame);
         fsemu_video_auto_screenshot(frame);
         if (fsemu_screenshot_should_capture()) {
             fsemu_screenshot_capture_video_frame(frame);

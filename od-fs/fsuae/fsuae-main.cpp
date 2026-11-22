@@ -12,6 +12,7 @@
 #include <glib/genviron.h>
 #include <glib/gstdio.h>
 #include <signal.h>
+#include <string.h>
 
 #include "fs/log.h"
 #include "fs/thread.h"
@@ -444,6 +445,30 @@ static void show_python_thread_error(void)
 // returns its exit code.
 static int run_fs_uae(int argc, char *argv[])
 {
+    // Consume cracker-uae debug server options before the Python UI parses argv. The C
+    // debug server reads these settings from the environment.
+    {
+        int out = 1;
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--debug_server") == 0 ||
+                strcmp(argv[i], "--debug-server") == 0) {
+                SDL_setenv_unsafe("CRACKER_UAE_DEBUG_SERVER", "1", 1);
+            } else if (strncmp(argv[i], "--debug_server=", 15) == 0) {
+                SDL_setenv_unsafe("CRACKER_UAE_DEBUG_SERVER", argv[i] + 15, 1);
+            } else if (strncmp(argv[i], "--debug-server=", 15) == 0) {
+                SDL_setenv_unsafe("CRACKER_UAE_DEBUG_SERVER", argv[i] + 15, 1);
+            } else if (strncmp(argv[i], "--debug_server_port=", 20) == 0) {
+                SDL_setenv_unsafe("CRACKER_UAE_DEBUG_SERVER_PORT", argv[i] + 20, 1);
+            } else if (strncmp(argv[i], "--debug-server-port=", 20) == 0) {
+                SDL_setenv_unsafe("CRACKER_UAE_DEBUG_SERVER_PORT", argv[i] + 20, 1);
+            } else {
+                argv[out++] = argv[i];
+            }
+        }
+        argc = out;
+        argv[argc] = NULL;
+    }
+
     fsuae_extras_run(argc, argv);
 
     SDL_Log("%s starting...", fsuae_buildinfo_get_version_string());

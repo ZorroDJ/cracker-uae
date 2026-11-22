@@ -71,6 +71,7 @@
 
 #include "uae/debuginfo.h"
 #include "uae/segtracker.h"
+#include "uae/libtrace.h"
 
 #undef _WIN32
 
@@ -7938,6 +7939,7 @@ static uae_u32 REGPARAM2 filesys_diagentry (TrapContext *ctx)
 #ifdef WITH_SEGTRACKER
 	resaddr = segtracker_startup(resaddr);
 #endif
+	resaddr = libtrace_startup(ctx, resaddr);
 	resaddr = uaeres_startup(ctx, resaddr);
 #ifdef BSDSOCKET
 	resaddr = bsdlib_startup(ctx, resaddr);

@@ -25,6 +25,7 @@ const char *fsemu_screenshot_path(void);
 const char *fsemu_screenshot_path_for_type(const char *type);
 
 void fsemu_screenshot_capture_video_frame(fsemu_video_frame_t *frame);
+void fsemu_screenshot_remember_video_frame(fsemu_video_frame_t *frame);
 
 #ifdef FSEMU_INTERNAL
 

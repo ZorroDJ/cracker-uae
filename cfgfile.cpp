@@ -8595,6 +8595,11 @@ void default_prefs (struct uae_prefs *p, bool reset, int type)
 	reset_inputdevice_config (p, reset);
 	memset (p, 0, sizeof (*p));
 	_tcscpy (p->description, _T("UAE default configuration"));
+	/* cracker-uae: libtrace needs the UAE board/filesys diag entry */
+	const char *libtrace_env = getenv("CRACKER_UAE_LIBTRACE");
+	if (libtrace_env && libtrace_env[0] && strcmp(libtrace_env, "0")) {
+		p->uaeboard = 2;
+	}
 	p->config_hardware_path[0] = 0;
 	p->config_host_path[0] = 0;
 
