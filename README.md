@@ -17,7 +17,18 @@ Hi Guys, welcome to this fork of FS-UAE, with some addictions for the **modern &
 - reset, quit
 - screenshot [path] - capture the emulator’s post-planar-conversion RGB framebuffer, directly to PNG.
 We also fixed screenshot handling to respect the framebuffer’s actual row stride, eliminating distorted captures.
-
+- the original debugger interface can be invoked in that way (enjoy a bit of italian!):
+```
+debug h          → help originale dei comandi disponibili
+debug T          → task list
+debug K          → stato libtrace
+debug t          → single-step
+debug f ADDRESS  → breakpoint
+debug g          → riprende l’esecuzione
+debug x          → esce dal debugger e riprende
+debug status     → stato running/halted, senza interrompere
+debug detach     → rilascia il controllo remoto
+```
 
 ## Libtrace++ (Libtrace port to FS-UAE 5) ##
 [libtrace](https://lallafa.de/blog/2016/09/libtrace-a-library-function-tracer-for-fs-uae/) by lallafa with fixes & extensions. Now you can easily trace also BCPL system calls from Kickstart 1.x (backend LVO non-JMP and BCPL calls profiles)! **Please don't enable JIT for best results!*, es: set CRACKER_UAE_LIBTRACE=1 on shell, like:
