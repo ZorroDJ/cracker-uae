@@ -63,7 +63,7 @@ libtrace enable <0|1>
 # WHY
 
 1) Because it's fun
-2) To make a world-first: writing a VBCC[http://www.compilers.de/vbcc.html] backed to skip C runtime and use BCPL from C in Kickstart 1.x to make CLI commands smaller
+2) To make a world-first: writing a VBCC(http://www.compilers.de/vbcc.html) backed to skip C runtime and use BCPL from C in Kickstart 1.x to make CLI commands smaller
 3) To trace/investigate/crack anything with ease
 
 Check [od-fs/README.md](od-fs/README.md) for plain old FS-UAE README file.
