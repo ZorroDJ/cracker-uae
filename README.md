@@ -1,71 +1,63 @@
-# FS-UAE
+# CRACKER-UAE (fù FS-UAE) by ZorroDJ
 
-See [od-fs/README.md](od-fs/README.md) for the full FS-UAE README file.
+Hi Guys, welcome to this fork of FS-UAE, with some addictions for the **modern & brave Amiga cracker**, optimized for Linux:
 
-The FS-UAE repository is now a superset of the
-[WinUAE](https://github.com/tonioni/WinUAE) repository. This makes it easier to
-merge/compare code, and also build both FS-UAE and WinUAE test builds from the
-same shared code base.
+## Flexi-debugger ##
 
-The original README.md from the WinUAE repository follows:
+### Local TCP command interface ###
+- Opt-in server bound to 127.0.0.1, with a configurable port.
+- Enabled through --debug_server=1 --debug_server_port=23456, or equivalent environment variables.
+- Line-based protocol with OK/ERR replies and a . response terminator.
+- Python client: tools/cracker-uae-debug.py.
+### Remote commands ###
+- ping, help, frames
+- regs — CPU register dump
+- mem <hex-address> <length> — guest memory hex dump
+- floppy <path> - insert an image into DF0
+- reset, quit
+- screenshot [path] - capture the emulator’s post-planar-conversion RGB framebuffer, directly to PNG.
+We also fixed screenshot handling to respect the framebuffer’s actual row stride, eliminating distorted captures.
 
----
 
-Optional GDB debugging is described in
-[the shared debugging guide](README_unix.md#gdb-debugging).
+## Libtrace++ (Libtrace port to FS-UAE 5) ##
+[libtrace](https://lallafa.de/blog/2016/09/libtrace-a-library-function-tracer-for-fs-uae/) by lallafa with fixes & extensions. Now you can easily trace also BCPL system calls from Kickstart 1.x (backend LVO non-JMP and BCPL calls profiles)! **Please don't enable JIT for best results!*, es: set CRACKER_UAE_LIBTRACE=1 on shell, like:
+```
+libtrace config /path/to/profile.cfg
+libtrace output /path/to/calls.log
+libtrace task Initial CLI
+libtrace enable 1
+reset
+```
 
-1) Requirements: Windows 7 32-bit/64-bit or newer.
+In short:
+* Original features
+- Ported the original libtrace and FD metadata parser.
+- Fixed resident activation by lowering its priority below Expansion.
+- Debugger commands: K, Ke, Kc, Kt, Ko; K replaces the original L prefix because L already means “load memory.”
+* TCP controls:
+libtrace config <path>
+libtrace output <path>
+libtrace task <name>
+libtrace enable <0|1>
+- Configuration changes are queued on the emulation thread; installation occurs on reset.
+* DOS 1.x and native BCPL tracing
+- Added a read-only instruction observer for non-JMP DOS library vectors.
+- Added native BCPL SAVE/RET observation using the live global vector and BCPL frame.
+- Captures public DOS results in D0, native BCPL results in D1, and bounded, escaped BSTR previews.
+- Initial BCPL signatures: writes, writef, wrch, writen, newline, rdch, readn, input, output.
+* Validation
+- Added tools/libtrace-smoke.py for tracing, filtering, reset and re-enable tests.
+- Verified on Workbench 1.2 / Kickstart 1.3, including the original BCPL Echo and a mixed C/BCPL probe.
+- The new instruction-observer backend currently supports the 68000 interpreter without JIT.
 
-2) Visual Studio 2017 Community with the following feature:
-	"Desktop Development with C++" with follow option:
-	-"Support Windows XP for C++"
-	-"Windows 8.1 SDK UCRT SDK"
-	-"Windows 10 SDK 10.0.17763.0"
+# WHY
 
-3) Download and Install the Windows Driver Kit (WDK). 16299 (1709) or newer.
-		
-	Download Link -> https://docs.microsoft.com/en-us/windows-hardware/drivers/other-wdk-downloads
-	
-4) Download the zip packages include and lib "winuaeinclibs.zip" and create the directory "c:\dev" and extract all. When finished you have "c:\dev\include" and \"c:\dev\lib" 
-	 	 
-	Download Link -> https://download.abime.net/winuae/files/b/winuaeinclibs.zip
-		
-5) Download WinUAE source packages and extract all (anywhere you want).
+1) Because it's fun
+2) To make a world-first: writing a VBCC[http://www.compilers.de/vbcc.html] backed to skip C runtime and use BCPL from C in Kickstart 1.x to make CLI commands smaller
+3) To trace/investigate/crack anything with ease
 
-	Download Link -> https://github.com/tonioni/WinUAE/archive/<version>.zip
-	or (preferably) use git client.
+Check [od-fs/README.md](od-fs/README.md) for plain old FS-UAE README file.
 
-6) Download the zip package aros.rom.cpp.zip and extract into WinUAE source directory.
+# WHOAMI
 
-	Download Link -> https://download.abime.net/winuae/files/b/aros.rom.cpp.zip	
-				
-7) Download and Install Nasm (Assembler Compiler) and put it in PATH
-
-	https://www.nasm.us/
-
-8) In Visual Studio click on "File"->"Open"->"Project/Solution" select the folder <source directory>\od-win32\winuae_msvc15\winuae_msvc.sln (Ignore error message "Unsupported" and click ok)
-
-9) In The solution 'winuae_msvc' you can unload or delete the following projects (and all others not needed in step 12):
-	-uaeunp
-	-consolewrapper
-	-decompess
-	-fdrawcmd
-	-ipctester
-	-resourcedll
-	-singlefilehelper
-	-wix
-
-10) Change to 32-bit Release mode.
-
-11) Build following projects in following order:
-	build68k
-	genlinetoscr
-	genblitter
-	gencpu
-	gencomp
-	prowizard
-	unpackers
-		
-12) Switch to Test (debug build) or FullRelease (full optimized) and select either 32-bit or 64-bit. Compile.
-
-Finished. In "D:\Amiga\" you find winuae.exe and winuae64.exe
+You know who I'm. I'm a fine software engineer from Italy, you know.
