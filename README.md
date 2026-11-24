@@ -31,7 +31,7 @@ debug detach     → rilascia il controllo remoto
 ```
 
 ## Libtrace++ (Libtrace port to FS-UAE 5) ##
-[libtrace](https://lallafa.de/blog/2016/09/libtrace-a-library-function-tracer-for-fs-uae/) by lallafa with fixes & extensions. Now you can easily trace also BCPL system calls from Kickstart 1.x (backend LVO non-JMP and BCPL calls profiles)! **Please don't enable JIT for best results!*, es: set CRACKER_UAE_LIBTRACE=1 on shell, like:
+[libtrace](https://lallafa.de/blog/2016/09/libtrace-a-library-function-tracer-for-fs-uae/) by lallafa with fixes & extensions. Now you can easily trace also BCPL system calls from Kickstart 1.x (backend LVO non-JMP and BCPL calls profiles)! **Please don't enable JIT for best results!**, es: set CRACKER_UAE_LIBTRACE=1 on shell, like:
 ```
 libtrace config /path/to/profile.cfg
 libtrace output /path/to/calls.log
